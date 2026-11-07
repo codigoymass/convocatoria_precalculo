@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Calculadora de ecuaciones cuadráticas</title>
+<style>
+:root {
+  --bg: #ffffff; --surface: #ffffff; --text: #000000; --muted: #555555;
+  --line: #cccccc; --accent: #000000; --accent-text: #ffffff; --error: #b42318;
+  --vertice: #f97066; --corte: #b42318;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #000000; --surface: #000000; --text: #ffffff; --muted: #aaaaaa;
+    --line: #444444; --accent: #ffffff; --accent-text: #000000; --error: #f97066;
+    --vertice: #f97066; --corte: #b42318;
+    color-scheme: dark;
+  }
+}
+*, *::before, *::after { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font-family: "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+  line-height: 1.5; padding: 24px 16px 48px;
+}
+main { max-width: 600px; margin: 0 auto; }
+h1 { font-size: 1.6rem; margin: 0 0 4px; }
+p.sub { margin: 0 0 20px; color: var(--muted); }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 20px; }
+label { display: block; font-size: .9rem; color: var(--muted); margin-bottom: 6px; }
+input {
+  font: 1.15rem Georgia, "Times New Roman", serif; padding: 12px; width: 100%;
+  border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--text);
+}
+input:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.ayuda { font-size: .85rem; color: var(--muted); margin: 8px 0 0; }
+
+.teclado {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(56px, 1fr));
+  gap: 8px; margin-top: 14px;
+}
+.teclado button {
+  font: 1.15rem Georgia, "Times New Roman", serif; padding: 10px 0; border-radius: 6px;
+  background: var(--bg); color: var(--text); border: 1px solid var(--line); cursor: pointer;
+}
+.teclado button:hover { border-color: var(--accent); }
+.teclado button:active { background: var(--accent); color: var(--accent-text); }
+
+.actions { display: flex; gap: 10px; margin-top: 16px; }
+.actions button {
+  font: inherit; padding: 10px 18px; border-radius: 6px; cursor: pointer;
+  border: 1px solid var(--accent); background: var(--accent); color: var(--accent-text);
+}
+.actions button.secondary { background: transparent; color: var(--accent); }
+.actions button:disabled { opacity: .6; cursor: wait; }
+#out { margin-top: 20px; }
+.error { color: var(--error); }
+.result h2 { font-size: 1.1rem; margin: 0 0 8px; }
+.big { font-size: 1.25rem; font-weight: 600; font-family: Georgia, serif; }
+.big small { font-size: .9rem; font-weight: 400; color: var(--muted); }
+.estandar { font-family: Georgia, serif; color: var(--muted); }
+.pasos { border-top: 1px solid var(--line); padding-top: 12px; margin-top: 12px; font-family: Georgia, serif; }
+.pasos div { margin: 4px 0; overflow-x: auto; }
+.tabla-juego { border-collapse: collapse; margin: 14px 0; width: 100%; }
+.tabla-juego th, .tabla-juego td { border: 1px solid var(--line); padding: 8px; text-align: center; }
+.tabla-juego th { background: var(--bg); }
+.juego-feedback { min-height: 1.5em; }
+
+#grafica { margin-top: 16px; }
+.grafica-barra { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.zoom { display: flex; gap: 6px; }
+.zoom button {
+  font: inherit; min-width: 38px; padding: 4px 10px; border-radius: 6px; cursor: pointer;
+  background: transparent; color: var(--accent); border: 1px solid var(--accent);
+}
+#lienzo {
+  display: block; width: 100%; height: 340px; border: 1px solid var(--line);
+  border-radius: 8px; background: var(--bg); touch-action: none; cursor: grab;
+}
+#lienzo:active { cursor: grabbing; }
+.leyenda { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: .85rem; color: var(--muted); margin: 8px 0 0; }
+.leyenda i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; }
+.coord { display: none; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Calculadora de ecuaciones cuadráticas</h1>
+
+  <div class="card">
+    <label for="ecuacion">Ecuación</label>
+    <input id="ecuacion" type="text" autocomplete="off" spellcheck="false">
+
+    <div class="teclado" id="teclado" role="group" aria-label="Símbolos matemáticos"></div>
+
+    <div class="actions">
+      <button id="calc" type="button">Resolver</button>
+      <button id="clasificar" type="button" class="secondary">Clasificar</button>
+      <button id="clear" type="button" class="secondary">Limpiar</button>
+    </div>
+    <div id="out" aria-live="polite"></div>
+
+    <div id="grafica" hidden>
+      <div class="grafica-barra">
+        <strong>Gráfica</strong>
+        <div class="zoom">
+          <button id="zmas" type="button" aria-label="Acercar" title="Acercar">+</button>
+          <button id="zmenos" type="button" aria-label="Alejar" title="Alejar">−</button>
+          <button id="zajustar" type="button" title="Volver a la vista inicial">Ajustar</button>
+        </div>
+      </div>
+      <canvas id="lienzo" role="img" aria-label="Gráfica de la parábola"></canvas>
+      <p class="coord" id="coord"></p>
+      <p class="leyenda">
+        <span><i style="background: var(--accent)"></i>Raíces</span>
+        <span><i style="background: var(--vertice)"></i>Vértice</span>
+        <span><i style="background: var(--corte)"></i>Corte con el eje y</span>
+      </p>
+    </div>
+  </div>
+
+  <section class="card" aria-labelledby="titulo-juego">
+    <h2 id="titulo-juego">Juego: Adivina la función</h2>
+    <p class="sub">Observa la tabla y escribe la función lineal que relaciona x con y.</p>
+    <div class="actions"><button id="nuevoJuego" type="button">Nueva partida</button></div>
+    <div id="juegoPartida" hidden>
+      <table class="tabla-juego">
+        <caption>Valores de la función</caption>
+        <thead><tr><th scope="col">x</th><th scope="col">y</th></tr></thead>
+        <tbody id="valoresJuego"></tbody>
+      </table>
+      <label for="respuestaJuego">Tu respuesta (por ejemplo, 2x + 3)</label>
+      <input id="respuestaJuego" type="text" autocomplete="off" spellcheck="false">
+      <div class="actions">
+        <button id="comprobarJuego" type="button">Comprobar</button>
+        <button id="finalizarJuego" type="button" class="secondary">Finalizar y mostrar respuesta</button>
+      </div>
+      <p id="feedbackJuego" class="juego-feedback" aria-live="polite"></p>
+    </div>
+  </section>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const out = $("out");
+const input = $("ecuacion");
+const grafica = $("grafica"); 
+
+const SIMBOLOS = [
+  { etiqueta: "x²", texto: "x²",  nombre: "x al cuadrado" },
+  { etiqueta: "²",  texto: "²",   nombre: "exponente 2" },
+  { etiqueta: "³",  texto: "³",   nombre: "exponente 3" },
+  { etiqueta: "^",  texto: "^",   nombre: "potencia" },
+  { etiqueta: "√",  texto: "√()", nombre: "raíz cuadrada", atras: 1 },
+  { etiqueta: "π",  texto: "π",   nombre: "pi" },
+  { etiqueta: "×",  texto: "×",   nombre: "multiplicación" },
+  { etiqueta: "÷",  texto: "÷",   nombre: "división" },
+  { etiqueta: "−",  texto: "−",   nombre: "resta" },
+  { etiqueta: "⌫",  accion: "borrar", nombre: "borrar un carácter" },
+];
+
+function insertar(texto, atras = 0) {
+  const inicio = input.selectionStart ?? input.value.length;
+  const fin = input.selectionEnd ?? input.value.length;
+  input.setRangeText(texto, inicio, fin, "end");
+  const pos = input.selectionStart - atras;
+  input.setSelectionRange(pos, pos);
+  input.focus();
+}
+
+function borrar() {
+  let inicio = input.selectionStart ?? input.value.length;
+  const fin = input.selectionEnd ?? input.value.length;
+  if (inicio === fin) inicio = Math.max(0, inicio - 1);
+  input.setRangeText("", inicio, fin, "end");
+  input.focus();
+}
+
+SIMBOLOS.forEach((s) => {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.textContent = s.etiqueta;
+  b.title = s.nombre;
+  b.setAttribute("aria-label", s.nombre);
+  b.addEventListener("mousedown", (e) => e.preventDefault()); // el cuadro de texto conserva el cursor
+  b.addEventListener("click", () => (s.accion === "borrar" ? borrar() : insertar(s.texto, s.atras || 0)));
+  $("teclado").appendChild(b);
+});
+
+const escapar = (s) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+
+const redondear = (n) => {
+  const r = Math.round(n * 1e6) / 1e6;
+  return String(Object.is(r, -0) ? 0 : r).replace(".", ",");
+};
+
+function decimal({ re, im }) {
+  if (Math.abs(im) < 1e-12) return redondear(re);
+  return `${redondear(re)} ${im < 0 ? "−" : "+"} ${redondear(Math.abs(im))}i`;
+}
+
+const TIPOS = {
+  reales_distintas: "Dos soluciones reales distintas.",
+  real_doble: "Una solución real doble.",
+  complejas: "No hay soluciones reales: las soluciones son complejas.",
+};
+
+const CLASIFICACION = {
+  lineal: "Lineal",
+  cuadratica: "Cuadrática",
+  constante: "Constante",
+  no_aplica: "No aplica",
+};
+
+const lienzo = $("lienzo");
+let datos = null; // última respuesta del servidor
+let vista = null; // rango visible: { xmin, xmax, ymin, ymax }
+
+function ampliar(min, max) {
+  const span = max - min;
+  if (span < 1e-9) return [min - 3, max + 3];
+  return [min - span * 0.3, max + span * 0.3];
+}
+
+function ajustar() {
+  const xs = [0, datos.vertice.x];
+  const ys = [0, datos.coef.c, datos.vertice.y];
+  datos.raices.forEach((r) => { if (Math.abs(r.im) < 1e-12) xs.push(r.re); });
+  const [xmin, xmax] = ampliar(Math.min(...xs), Math.max(...xs));
+  const [ymin, ymax] = ampliar(Math.min(...ys), Math.max(...ys));
+  vista = { xmin, xmax, ymin, ymax };
+}
+
+function paso(span, maxMarcas) {
+  const crudo = span / maxMarcas;
+  const mag = Math.pow(10, Math.floor(Math.log10(crudo)));
+  const f = crudo / mag;
+  return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * mag;
+}
+
+function dibujar() {
+  if (!datos || !vista || grafica.hidden) return;
+
+  const dpr = window.devicePixelRatio || 1;
+  const w = lienzo.clientWidth, h = lienzo.clientHeight;
+  if (!w || !h) return;
+  lienzo.width = Math.round(w * dpr);
+  lienzo.height = Math.round(h * dpr);
+  const g = lienzo.getContext("2d");
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  const css = getComputedStyle(document.documentElement);
+  const color = (n) => css.getPropertyValue(n).trim();
+  const { xmin, xmax, ymin, ymax } = vista;
+  const X = (x) => ((x - xmin) / (xmax - xmin)) * w;
+  const Y = (y) => h - ((y - ymin) / (ymax - ymin)) * h;
+  const { a, b, c } = datos.coef;
+
+  g.clearRect(0, 0, w, h);
+  g.font = "12px 'Segoe UI', system-ui, sans-serif";
+
+  const px = paso(xmax - xmin, w / 80);
+  const py = paso(ymax - ymin, h / 60);
+  const ejeX = Math.min(Math.max(Y(0), 0), h); // el eje se queda visible aunque salga de la vista
+  const ejeY = Math.min(Math.max(X(0), 0), w);
+
+  g.lineWidth = 1;
+  g.strokeStyle = color("--line");
+  g.fillStyle = color("--muted");
+  g.beginPath();
+  for (let i = Math.ceil(xmin / px); i * px <= xmax; i++) {
+    const x = X(i * px);
+    g.moveTo(x, 0); g.lineTo(x, h);
+  }
+  for (let i = Math.ceil(ymin / py); i * py <= ymax; i++) {
+    const y = Y(i * py);
+    g.moveTo(0, y); g.lineTo(w, y);
+  }
+  g.stroke();
+
+  g.textAlign = "center";
+  g.textBaseline = "top";
+  for (let i = Math.ceil(xmin / px); i * px <= xmax; i++) {
+    if (i === 0) continue;
+    const ty = Math.min(ejeX + 4, h - 16);
+    g.fillText(redondear(i * px), X(i * px), ty);
+  }
+  g.textAlign = "left";
+  g.textBaseline = "middle";
+  for (let i = Math.ceil(ymin / py); i * py <= ymax; i++) {
+    if (i === 0) continue;
+    const tx = Math.min(ejeY + 6, w - 40);
+    g.fillText(redondear(i * py), tx, Y(i * py));
+  }
+
+  g.strokeStyle = color("--muted");
+  g.lineWidth = 1.5;
+  g.beginPath();
+  g.moveTo(0, ejeX); g.lineTo(w, ejeX);
+  g.moveTo(ejeY, 0); g.lineTo(ejeY, h);
+  g.stroke();
+
+  g.strokeStyle = color("--accent");
+  g.lineWidth = 2.5;
+  g.lineJoin = "round";
+  g.beginPath();
+  for (let p = 0; p <= w; p++) {
+    const x = xmin + (p / w) * (xmax - xmin);
+    const y = a * x * x + b * x + c;
+    const yy = Math.max(-1e4, Math.min(1e4, Y(y)));
+    if (p === 0) g.moveTo(p, yy); else g.lineTo(p, yy);
+  }
+  g.stroke();
+
+  const punto = (x, y, col, etiqueta) => {
+    const cx = X(x), cy = Y(y);
+    if (cx < -10 || cx > w + 10 || cy < -10 || cy > h + 10) return;
+    g.fillStyle = col;
+    g.beginPath();
+    g.arc(cx, cy, 5, 0, Math.PI * 2);
+    g.fill();
+    g.lineWidth = 2;
+    g.strokeStyle = color("--surface");
+    g.stroke();
+
+    g.fillStyle = color("--text");
+    g.textBaseline = "alphabetic";
+    g.textAlign = "left";
+    const ancho = g.measureText(etiqueta).width;
+    const tx = Math.min(Math.max(cx + 8, 2), w - ancho - 2);
+    const ty = Math.min(Math.max(cy - 8, 14), h - 4);
+    g.fillText(etiqueta, tx, ty);
+  };
+
+  const corteY = { x: 0, y: c };
+  punto(corteY.x, corteY.y, color("--corte"), `(0, ${redondear(c)})`);
+  punto(datos.vertice.x, datos.vertice.y, color("--vertice"),
+    `(${redondear(datos.vertice.x)}, ${redondear(datos.vertice.y)})`);
+  datos.raices.forEach((r) => {
+    if (Math.abs(r.im) < 1e-12) punto(r.re, 0, color("--accent"), `(${redondear(r.re)}, 0)`);
+  });
+}
+
+function zoom(factor, fx = 0.5, fy = 0.5) {
+  const sx = vista.xmax - vista.xmin, sy = vista.ymax - vista.ymin;
+  const cx = vista.xmin + fx * sx, cy = vista.ymin + fy * sy;
+  vista.xmin = cx - fx * sx * factor;
+  vista.xmax = cx + (1 - fx) * sx * factor;
+  vista.ymin = cy - fy * sy * factor;
+  vista.ymax = cy + (1 - fy) * sy * factor;
+  dibujar();
+}
+
+function mostrarGrafica(r) {
+  if (!r.coef) {
+    grafica.hidden = true;
+    $("hueco").innerHTML = '<p class="error">No llegaron los datos de la gráfica. Revisa que app.py tenga la línea "coef" y reinicia el servidor.</p>';
+    return;
+  }
+  datos = r;
+  $("hueco").appendChild(grafica);
+  grafica.hidden = false;
+  $("coord").textContent = "Arrastra para mover la gráfica. Usa la rueda del ratón o los botones para acercar y alejar.";
+  ajustar();
+  dibujar();
+}
+
+let arrastre = null;
+lienzo.addEventListener("pointerdown", (e) => {
+  lienzo.setPointerCapture(e.pointerId);
+  arrastre = { x: e.clientX, y: e.clientY };
+});
+lienzo.addEventListener("pointermove", (e) => {
+  if (!vista) return;
+  const w = lienzo.clientWidth, h = lienzo.clientHeight;
+  if (arrastre) {
+    const dx = ((e.clientX - arrastre.x) / w) * (vista.xmax - vista.xmin);
+    const dy = ((e.clientY - arrastre.y) / h) * (vista.ymax - vista.ymin);
+    vista.xmin -= dx; vista.xmax -= dx;
+    vista.ymin += dy; vista.ymax += dy;
+    arrastre = { x: e.clientX, y: e.clientY };
+    dibujar();
+  } else {
+    const r = lienzo.getBoundingClientRect();
+    const x = vista.xmin + ((e.clientX - r.left) / r.width) * (vista.xmax - vista.xmin);
+    const y = datos.coef.a * x * x + datos.coef.b * x + datos.coef.c;
+    $("coord").textContent = `Sobre la curva: x = ${redondear(x)}, y = ${redondear(y)}`;
+  }
+});
+["pointerup", "pointercancel"].forEach((ev) => lienzo.addEventListener(ev, () => { arrastre = null; }));
+lienzo.addEventListener("wheel", (e) => {
+  e.preventDefault();
+  const r = lienzo.getBoundingClientRect();
+  zoom(e.deltaY < 0 ? 0.8 : 1.25, (e.clientX - r.left) / r.width, 1 - (e.clientY - r.top) / r.height);
+}, { passive: false });
+
+$("zmas").addEventListener("click", () => vista && zoom(0.8));
+$("zmenos").addEventListener("click", () => vista && zoom(1.25));
+$("zajustar").addEventListener("click", () => { if (datos) { ajustar(); dibujar(); } });
+window.addEventListener("resize", dibujar);
+
+async function clasificar() {
+  const ecuacion = input.value;
+  if (!ecuacion.trim()) {
+    grafica.hidden = true;
+    out.innerHTML = '<p class="error">Escribe una función para clasificarla.</p>';
+    return;
+  }
+
+  $("clasificar").disabled = true;
+  try {
+    const resp = await fetch("/api/definir_tipo", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ecuacion }),
+    });
+    const r = await resp.json();
+
+    if (!resp.ok) {
+      grafica.hidden = true;
+      out.innerHTML = `<p class="error">${escapar(r.error)}</p>`;
+      return;
+    }
+
+    const tipo = CLASIFICACION[r.tipo] || r.tipo;
+    out.innerHTML = `
+      <div class="result">
+        <h2>Clasificación</h2>
+        <p class="big">${escapar(r.mensaje)}</p>
+        <p class="estandar"><strong>Tipo de función:</strong> ${escapar(tipo)}</p>
+      </div>`;
+    grafica.hidden = true;
+  } catch (e) {
+    grafica.hidden = true;
+    out.innerHTML = '';
+  } finally {
+    $("clasificar").disabled = false;
+  }
+}
+
+async function calcular() {
+  const ecuacion = input.value;
+  if (!ecuacion.trim()) {
+    grafica.hidden = true;
+    out.innerHTML = '<p class="error">Escribe una ecuación para resolverla.</p>';
+    return;
+  }
+
+  $("calc").disabled = true;
+  try {
+    const resp = await fetch("/api/resolver", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ecuacion }),
+    });
+    const r = await resp.json();
+
+    if (!resp.ok) {
+      grafica.hidden = true;
+      out.innerHTML = `<p class="error">${escapar(r.error)}</p>`;
+      return;
+    }
+
+    const soluciones = r.raices.map((x, i) => {
+      const nombre = r.raices.length === 1 ? "x" : `x${i + 1}`;
+      const dec = decimal(x);
+      const mostrarDec = dec !== x.exacta.replace(".", ",");
+      return `${nombre} = ${escapar(x.exacta)}${mostrarDec ? ` <small>≈ ${escapar(dec)}</small>` : ""}`;
+    }).join("<br>");
+    const tipoFuncion = CLASIFICACION[r.tipo_funcion] || r.tipo_funcion_label || "Cuadrática";
+
+    out.innerHTML = `
+      <div class="result">
+        <h2>Resultado</h2>
+        <p class="estandar">${escapar(r.estandar)}</p>
+        <p class="estandar"><strong>Tipo de función:</strong> ${escapar(tipoFuncion)}</p>
+        <p class="big">${soluciones}</p>
+        <div id="hueco"></div>
+        <div class="pasos">
+          <strong>Procedimiento</strong>
+          ${r.pasos.map((p, i) => `<div>${i + 1}. ${escapar(p)}</div>`).join("")}
+        </div>
+      </div>`;
+    mostrarGrafica(r);
+
+  } catch (e) {
+    grafica.hidden = true;
+    out.innerHTML = '';
+  } finally {
+    $("calc").disabled = false;
+  }
+}
+
+$("calc").addEventListener("click", calcular);
+$("clasificar").addEventListener("click", clasificar);
+$("clear").addEventListener("click", () => {
+  input.value = "";
+  grafica.hidden = true;
+  out.innerHTML = "";
+  input.focus();
+});
+input.addEventListener("keydown", (e) => { if (e.key === "Enter") calcular(); });
+
+const partidaJuego = $("juegoPartida");
+const valoresJuego = $("valoresJuego");
+const respuestaJuego = $("respuestaJuego");
+const feedbackJuego = $("feedbackJuego");
+let juegoActivo = false;
+
+async function solicitarJuego(url, datos = {}) {
+  const respuesta = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(datos),
+  });
+  const resultado = await respuesta.json();
+  if (!respuesta.ok) throw new Error(resultado.error || "No se pudo completar la acción.");
+  return resultado;
+}
+
+$("nuevoJuego").addEventListener("click", async () => {
+  const boton = $("nuevoJuego");
+  boton.disabled = true;
+  try {
+    const resultado = await solicitarJuego("/api/juego/nueva");
+    valoresJuego.replaceChildren();
+    resultado.valores.forEach(({ x, y }) => {
+      const fila = document.createElement("tr");
+      [x, y].forEach((valor) => {
+        const celda = document.createElement("td");
+        celda.textContent = valor;
+        fila.appendChild(celda);
+      });
+      valoresJuego.appendChild(fila);
+    });
+    partidaJuego.hidden = false;
+    juegoActivo = true;
+    respuestaJuego.value = "";
+    respuestaJuego.disabled = false;
+    $("comprobarJuego").disabled = false;
+    $("finalizarJuego").disabled = false;
+    feedbackJuego.textContent = "Encuentra la regla lineal de la tabla.";
+    respuestaJuego.focus();
+  } catch (error) {
+    feedbackJuego.textContent = error.message || "No se pudo iniciar la partida.";
+    partidaJuego.hidden = false;
+  } finally {
+    boton.disabled = false;
+  }
+});
+
+$("comprobarJuego").addEventListener("click", async () => {
+  if (!juegoActivo) return;
+  if (!respuestaJuego.value.trim()) {
+    feedbackJuego.textContent = "Escribe una función antes de comprobar.";
+    respuestaJuego.focus();
+    return;
+  }
+
+  const boton = $("comprobarJuego");
+  boton.disabled = true;
+  try {
+    const resultado = await solicitarJuego("/api/juego/comprobar", {
+      respuesta: respuestaJuego.value,
+    });
+    feedbackJuego.textContent = resultado.correcta
+      ? "¡Correcto! Encontraste la función."
+      : "Incorrecto. Puedes volver a intentarlo o finalizar para ver la respuesta.";
+  } catch (error) {
+    feedbackJuego.textContent = error.message || "No se pudo comprobar la respuesta.";
+  } finally {
+    boton.disabled = !juegoActivo;
+  }
+});
+
+$("finalizarJuego").addEventListener("click", async () => {
+  if (!juegoActivo) return;
+  const boton = $("finalizarJuego");
+  boton.disabled = true;
+  try {
+    const resultado = await solicitarJuego("/api/juego/finalizar");
+    juegoActivo = false;
+    respuestaJuego.disabled = true;
+    $("comprobarJuego").disabled = true;
+    feedbackJuego.textContent = `Partida finalizada. La función correcta era: ${resultado.funcion}`;
+  } catch (error) {
+    feedbackJuego.textContent = error.message || "No se pudo finalizar la partida.";
+  } finally {
+    boton.disabled = !juegoActivo;
+  }
+});</script>
+</body>
+</html>
